@@ -1,0 +1,71 @@
+﻿#pragma kernel Step
+#pragma kernel Input
+
+#define NUM_THREAD_X 32
+#define NUM_THREAD_Y 32
+#define NUM_THREAD_Z 1
+
+#include "Variables.hlsl"
+
+
+RWStructuredBuffer<int> _WriteBuf;
+StructuredBuffer<int> _ReadBuf;
+
+inline int GetAlive(int2 xy)
+{
+	return (any(xy < 0) || (_Width <= xy.x) || (_Height <= xy.y))
+		       ? false
+		       : _ReadBuf[XyToIdx(xy)];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Step
+////////////////////////////////////////////////////////////////////////////////
+[numthreads(NUM_THREAD_X,NUM_THREAD_Y,NUM_THREAD_Z)]
+void Step (uint3 id : SV_DispatchThreadID)
+{
+	int2 pos = id.xy;
+	if ( (pos.x < _Width) && (pos.y < _Height))
+	{
+		int alive0  = GetAlive(id.xy + int2(-1,-1));
+		int alive1  = GetAlive(id.xy + int2( 0,-1));
+		int alive2  = GetAlive(id.xy + int2( 1,-1));
+		int alive3  = GetAlive(id.xy + int2(-1, 0));
+		int center  = GetAlive(id.xy + int2( 0, 0));
+		int alive4  = GetAlive(id.xy + int2( 1, 0));
+		int alive5  = GetAlive(id.xy + int2(-1, 1));
+		int alive6  = GetAlive(id.xy + int2( 0, 1));
+		int alive7  = GetAlive(id.xy + int2( 1, 1));
+
+        int count = alive0
+            + alive1 
+            + alive2 
+            + alive3 
+            + alive4 
+            + alive5 
+            + alive6 
+            + alive7;
+
+		int alive = (count == 3) || (center && (count == 2));
+		_WriteBuf[XyToIdx(pos)] = alive;
+	}
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Input
+////////////////////////////////////////////////////////////////////////////////
+float2 _InputPos;
+float _InputRadius;
+
+[numthreads(NUM_THREAD_X,NUM_THREAD_Y,NUM_THREAD_Z)]
+void Input (uint3 id : SV_DispatchThreadID)
+{
+	int2 pos = id.xy;
+	if ( (pos.x < _Width) && (pos.y < _Height))
+	{
+		if ( distance(_InputPos, pos) < _InputRadius) 
+		{
+			_WriteBuf[XyToIdx(pos)] = 1;
+		}
+	}
+}
